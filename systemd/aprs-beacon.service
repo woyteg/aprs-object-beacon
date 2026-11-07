@@ -1,0 +1,11 @@
+[Unit]
+Description=APRS Object Beacon - wysylanie obiektow do APRS-IS
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/aprs-beacon
+ExecStart=/usr/bin/python3 /opt/aprs-beacon/beacon.py

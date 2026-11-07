@@ -1,0 +1,26 @@
+{
+  "callsign": "N0CALL-10",
+  "passcode": "",
+  "server": "rotate.aprs2.net",
+  "port": 14580,
+  "max_comment": 160,
+  "objects": [
+    {
+      "name": "146.940-",
+      "enabled": true,
+      "lat": 0,
+      "lon": 0,
+      "symbol": "/r",
+      "tone": 100.0,
+      "offset": "",
+      "range_miles": 25,
+      "text": "FM Repeater {wx}"
+    }
+  ],
+  "weather": {
+    "api_key": "",
+    "units": "imperial",
+    "refresh_minutes": 60,
+    "template": "WX {temp} {press} {wind} chm{clouds} {precip}"
+  }
+}

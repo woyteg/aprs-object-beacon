@@ -1,0 +1,11 @@
+[Unit]
+Description=APRS Object Beacon co 10 minut
+
+[Timer]
+# :03, :13, :23 ... - przesuniete z pelnych minut
+OnCalendar=*:03/10
+AccuracySec=15s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

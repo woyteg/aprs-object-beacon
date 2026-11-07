@@ -1,0 +1,18 @@
+{
+  "announce": "{name} za {days} dni",
+  "default": [
+    "APRS Object Beacon - 73!",
+    "QRV - zapraszamy na nasluch"
+  ],
+  "holidays": [
+    {"date": "01-01", "text": "Szczesliwego Nowego Roku! HNY"},
+    {"date": "easter", "text": "Wesolych Swiat! Happy Easter"},
+    {"date": "05-03", "text": "Swieto Konstytucji 3 Maja"},
+    {"date": "memorial", "text": "Memorial Day - pamietamy"},
+    {"date": "07-04", "text": "Happy 4th of July!"},
+    {"date": "11-11", "text": "11.11 Niepodlegla / Veterans Day"},
+    {"date": "thanksgiving", "text": "Happy Thanksgiving! 73"},
+    {"date": "12-24", "text": "Wesolych Swiat / Merry Christmas"}
+  ],
+  "events": []
+}
