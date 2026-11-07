@@ -10,7 +10,7 @@ if ($tz === '' && is_link('/etc/localtime')) $tz = preg_replace('#^.*zoneinfo/#'
 
 const APP_DIR   = '/opt/aprs-beacon';   // instalator ustawia to automatycznie
 const APP_NAME  = 'APRS Object Beacon';
-const APP_VER   = '1.0';
+const APP_VER   = '1.1';
 const AUTHOR    = 'W9GIL';
 const ORG_NAME  = 'Group 312 Chicago';
 const ORG_URL   = 'https://group312chicago.org';
@@ -542,10 +542,8 @@ $stManual = $stPass !== '' && $stCall && (int)$stPass !== $stAuto;
   <label style="flex:1;min-width:220px"><?= L('Pozycja (szer., dł.)', 'Position (lat, lon)') ?>
     <input type="text" name="obj[<?= $i ?>][pos]" value="<?= (empty($o['lat']) && empty($o['lon'])) ? '' : h($o['lat'] . ', ' . $o['lon']) ?>" placeholder="<?= L('np.', 'e.g.') ?> 41.9108, -87.6779"></label>
 </div>
-<p class="hint" style="margin-top:6px"><?= L('Pozycję skopiuj z Google Maps: prawy klik na miejscu → kliknij w liczby → wklej tutaj.', 'Copy the position from Google Maps: right-click the spot → click the numbers → paste here.') ?>
-<a href="https://www.google.com/maps?q=<?= h(($o['lat'] ?? '') . ',' . ($o['lon'] ?? '')) ?>" target="_blank" style="color:var(--acc)"><?= L('Pokaż obecną na mapie', 'Show current on map') ?></a>.
-<?= L('Zmiana nazwy usunie starą nazwę z mapy przy następnym wysłaniu.', 'Renaming removes the old name from the map with the next transmission.') ?></p>
-<div class="row" style="margin-bottom:10px">
+<p class="hint" style="margin-top:6px"><?= L('Pozycję skopiuj z Google Maps: prawy klik na miejscu → kliknij w liczby → wklej tutaj.', 'Copy the position from Google Maps: right-click the spot → click the numbers → paste here.') ?> <a href="https://www.google.com/maps?q=<?= h(($o['lat'] ?? '') . ',' . ($o['lon'] ?? '')) ?>" target="_blank" style="color:var(--acc)"><?= L('Pokaż obecną na mapie', 'Show current on map') ?></a>. <?= L('Zmiana nazwy usunie starą nazwę z mapy przy następnym wysłaniu.', 'Renaming removes the old name from the map with the next transmission.') ?></p>
+<div class="row" style="margin-bottom:10px;align-items:flex-end">
   <label><?= L('Ikona', 'Icon') ?>
     <select name="obj[<?= $i ?>][symbol]" onchange="this.parentNode.nextElementSibling.style.display=this.value==='custom'?'':'none'"
      >
@@ -556,6 +554,7 @@ $stManual = $stPass !== '' && $stCall && (int)$stPass !== $stAuto;
     </select></label>
   <label style="<?= $isCustom ? '' : 'display:none' ?>"><?= L('Kod', 'Code') ?> <input type="text" name="obj[<?= $i ?>][symbol_custom]" value="<?= h($sym) ?>" maxlength="2" style="width:60px"></label>
 </div>
+<p class="hint" style="margin:-4px 0 10px"><?= L('Wybierz z listy albo „Inna” i wpisz własny kod (2 znaki, np. <code>/r</code>).', 'Pick from the list, or choose “Other” and enter your own code (2 characters, e.g. <code>/r</code>).') ?> <a href="https://aprs.world/symbols" target="_blank" rel="noopener" style="color:var(--acc)"><?= L('Zobacz wszystkie ikony APRS', 'See all APRS icons') ?> ↗</a></p>
 <p class="hint"><?= L('Stały opis wysyłany zawsze. Wpisz <code>{wx}</code>, żeby dodać pogodę.', 'Fixed description, always sent. Type <code>{wx}</code> to add the weather.') ?></p>
 <input type="text" name="obj[<?= $i ?>][text]" value="<?= h($o['text'] ?? '') ?>" placeholder="<?= L('np. FM Poland TG3109312 Group312Chicago.org albo: First Aid - Medical Tent', 'e.g. FM Poland TG3109312 Group312Chicago.org or: First Aid - Medical Tent') ?>">
 <?php $isFreq = $o['freq'] ?? true; ?>
