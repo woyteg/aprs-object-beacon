@@ -62,10 +62,10 @@ Repeaters rarely have APRS of their own, and sending objects by hand is easy to 
 - **Automatic comment** (optional per object), chosen by priority:
   1. an event happening today: `Club meeting today 6pm`
   2. an upcoming event, counted down: `Club meeting in 3 days`
-  3. a holiday, with fixed dates and calculated ones (Easter, Thanksgiving, Memorial Day, Labor Day, Pulaski Day, or any "Nth weekday of month")
+  3. a recurring event: holidays, contests and regular meetings, with fixed dates or calculated ones: Easter, Memorial Day, Labor Day, Thanksgiving, **ARRL Field Day**, **Winter Field Day**, or any "Nth weekday of the month", including every month (e.g. a club meeting on the first Monday)
   4. otherwise, a rotation of your own messages, one every 10 minutes
 - **Live weather** from OpenWeather, anywhere in the text with `{wx}`
-- **Web editor** at `http://<pi-address>/aprs/`, no password, reachable from your local network only
+- **Web editor** at `http://<pi-address>/aprs/` in **English and Polish** (flag switch in the header), no password, reachable from your local network only
 - **Live packet preview** with color-coded fields, last and next transmission time, and a "send now" button
 - **APRS-IS passcode** calculated automatically from your callsign
 - **Clean map**: deleting or renaming an object removes the old one (APRS object "kill")
@@ -125,6 +125,28 @@ Setup:
 1. Create a free account at openweathermap.org and copy your key from **My API keys**. New keys can take up to 2 hours to activate.
 2. Paste the key into the **Weather** section of the editor. Only its last 4 characters are shown afterwards.
 
+## Recurring events
+
+One line per entry, `date | text`. The date can be:
+
+| Date | Meaning |
+|---|---|
+| `12-24` | fixed date (MM-DD) |
+| `easter`, `memorial`, `labor`, `thanksgiving` | calculated every year |
+| `fieldday` | ARRL Field Day: Saturday of the 4th full weekend of June |
+| `winterfieldday` | Winter Field Day: Saturday of the last full weekend of January |
+| `nth:M:D:N` | N-th weekday D (1 = Mon … 7 = Sun) of month M; N `-1` = last; M `*` = every month |
+| `…+1`, `…-2` | shift by days: `fieldday+1` = Field Day Sunday, `easter+1` = Easter Monday |
+
+```
+nth:*:1:1      | Club meeting tonight 7pm!
+fieldday       | ARRL Field Day - QRV!
+fieldday+1     | ARRL Field Day - QRV!
+winterfieldday | Winter Field Day - QRV!
+```
+
+One-time events (`start | end | days to announce | name | text`) are announced with a countdown ("Club meeting in 3 days") and show your text on the day itself.
+
 ## Comment length
 
 The APRS spec allows 43 characters in an object comment. APRS-IS and aprs.fi accept much longer ones, and many objects use them. This project defaults to 160 characters (`max_comment` in `config.json`). The editor shows how much room is left and flags anything that will be cut. Radios often display only the first part of a long comment, so put the most important information first.
@@ -159,7 +181,6 @@ A backup of your settings is saved to `/root/aprs-beacon-backup-*.tar.gz`. Your 
 - The beacon sends over the internet to APRS-IS, not over RF. No radio or TNC is needed.
 - Objects are sent under your callsign; you are responsible for keeping them accurate. Remove event objects when the event is over.
 - The web editor has no password and is reachable from private (LAN) addresses only. Do not expose it to the internet.
-- The editor interface is currently in Polish. An English version is planned.
 
 ## License
 

@@ -53,10 +53,29 @@ To samo polecenie co przy instalacji. Twoje ustawienia, komentarze i klucz API z
 | Obiekty | nazwa, pozycja (wklejona z Google Maps), ikona, stały opis; dla przemienników ton, offset, zasięg; dodawanie i usuwanie obiektów |
 | Pogoda | klucz OpenWeather, jednostki, szablon; `{wx}` wstawia pogodę w dowolny tekst |
 | Komentarze domyślne | teksty zmieniane co 10 minut |
-| Święta | stałe daty i liczone automatycznie (Wielkanoc, Thanksgiving, Memorial Day…) |
-| Wydarzenia | zapowiedź „za X dni” i tekst w dniu wydarzenia |
+| Wydarzenia cykliczne | święta, zawody, regularne spotkania: stałe daty i liczone automatycznie (Wielkanoc, Memorial Day, Thanksgiving, ARRL Field Day, Winter Field Day, „N-ty dzień tygodnia”, także co miesiąc) |
+| Wydarzenia jednorazowe | zapowiedź „za X dni” i tekst w dniu wydarzenia |
 
-Kolejność komentarza: wydarzenie w toku, potem zapowiedź wydarzenia, potem święto, a na końcu rotacja.
+Kolejność komentarza: wydarzenie jednorazowe w toku, potem jego zapowiedź, potem wydarzenie cykliczne, a na końcu rotacja.
+
+Edytor jest po polsku i po angielsku; język przełączasz flagą w nagłówku.
+
+### Daty wydarzeń cyklicznych
+
+| Data | Znaczenie |
+|---|---|
+| `12-24` | stała data (MM-DD) |
+| `easter`, `memorial`, `labor`, `thanksgiving` | liczone co roku |
+| `fieldday` | ARRL Field Day: sobota 4. pełnego weekendu czerwca |
+| `winterfieldday` | Winter Field Day: sobota ostatniego pełnego weekendu stycznia |
+| `nth:M:D:N` | N-ty dzień tygodnia D (1 = pon … 7 = niedz) miesiąca M; N `-1` = ostatni; M `*` = każdy miesiąc |
+| `…+1`, `…-2` | przesunięcie o dni: `fieldday+1` = niedziela Field Day, `easter+1` = Poniedziałek Wielkanocny |
+
+Przykład, każdy pierwszy poniedziałek miesiąca:
+
+```
+nth:*:1:1 | Zapraszamy na Gracjane!
+```
 
 Edytor działa **bez hasła**, ale tylko z sieci lokalnej. Spoza LAN pokazuje komunikat o braku dostępu.
 

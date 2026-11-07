@@ -15,6 +15,7 @@ Uruchamiany co 10 min przez systemd timer (aprs-beacon.timer). Wysyla obiekt(y) 
 import argparse
 import datetime as dt
 import json
+import re
 import socket
 import sys
 import time
@@ -31,7 +32,7 @@ ALIASES = {
     "thanksgiving": "nth:11:4:4",   # 4. czwartek listopada
     "memorial": "nth:5:1:-1",       # ostatni poniedzialek maja
     "labor": "nth:9:1:1",           # 1. poniedzialek wrzesnia
-    "pulaski": "nth:3:1:1",         # Casimir Pulaski Day (IL), 1. pon. marca
+    "pulaski": "nth:3:1:1",         # Casimir Pulaski Day (IL) - zostawione dla zgodnosci
 }
 
 
@@ -171,16 +172,43 @@ def nth_weekday(y, month, weekday, n):
     return d - dt.timedelta(days=(d.weekday() - (weekday - 1)) % 7)
 
 
-def holiday_date(rule, year):
-    rule = rule.strip().lower()
-    rule = ALIASES.get(rule, rule)
-    if rule.startswith("easter"):
-        return easter(year) + dt.timedelta(days=int(rule[6:] or 0))
-    if rule.startswith("nth:"):
-        _, m, w, n = rule.split(":")
-        return nth_weekday(year, int(m), int(w), int(n))
-    m, d = rule.split("-")
-    return dt.date(year, int(m), int(d))
+def full_weekend_saturdays(y, month):
+    """Soboty, po ktorych niedziela jest w tym samym miesiacu (pelne weekendy)."""
+    d, out = dt.date(y, month, 1), []
+    while d.month == month:
+        if d.weekday() == 5 and (d + dt.timedelta(days=1)).month == month:
+            out.append(d)
+        d += dt.timedelta(days=1)
+    return out
+
+
+SPECIAL = {
+    "fieldday": lambda y: full_weekend_saturdays(y, 6)[3],         # ARRL Field Day: 4. pelny weekend czerwca (sobota)
+    "winterfieldday": lambda y: full_weekend_saturdays(y, 1)[-1],  # Winter Field Day: ostatni pelny weekend stycznia
+    "easter": easter,
+}
+RULE_RE = re.compile(r"^(nth:(?:\d{1,2}|\*):[1-7]:(?:-1|[1-5])|\d{2}-\d{2}|[a-z]+)([+-]\d{1,2})?$")
+
+
+def holiday_date(rule, year, month=None):
+    """Data wydarzenia cyklicznego w danym roku.
+    rule: MM-DD | easter | thanksgiving | memorial | labor | fieldday | winterfieldday
+          | nth:MIESIAC:DZIEN_TYG:KTORY (MIESIAC '*' = kazdy miesiac -> month)
+          + opcjonalne przesuniecie w dniach, np. easter+1, fieldday+1"""
+    m = RULE_RE.match(rule.strip().lower())
+    if not m:
+        raise ValueError(rule)
+    base, shift = m.group(1), int(m.group(2) or 0)
+    base = ALIASES.get(base, base)
+    if base in SPECIAL:
+        d = SPECIAL[base](year)
+    elif base.startswith("nth:"):
+        _, mo, w, n = base.split(":")
+        d = nth_weekday(year, (month or 1) if mo == "*" else int(mo), int(w), int(n))
+    else:
+        mo, day = base.split("-")
+        d = dt.date(year, int(mo), int(day))
+    return d + dt.timedelta(days=shift)
 
 
 # ---------- wybor komentarza ----------
@@ -212,7 +240,7 @@ def pick_comment(c, today, slot):
 
     for hol in c.get("holidays", []):
         try:
-            if holiday_date(hol["date"], today.year) == today:
+            if holiday_date(hol["date"], today.year, today.month) == today:
                 return hol["text"], "holiday"
         except Exception as e:
             log(f"Zla data swieta '{hol.get('date')}': {e}")

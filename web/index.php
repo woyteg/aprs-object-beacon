@@ -26,6 +26,27 @@ $err = '';
 
 function h($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); }
 
+// ---------- jezyk: PL / EN (flagi w naglowku, wybor zapamietany w ciasteczku) ----------
+if (isset($_GET['lang']) && in_array($_GET['lang'], ['pl', 'en'], true)) {
+    $LANG = $_GET['lang'];
+    setcookie('lang', $LANG, ['expires' => time() + 31536000, 'path' => '/', 'samesite' => 'Lax']);
+} elseif (in_array($_COOKIE['lang'] ?? '', ['pl', 'en'], true)) {
+    $LANG = $_COOKIE['lang'];
+} else {
+    $LANG = str_starts_with(strtolower($_SERVER['HTTP_ACCEPT_LANGUAGE'] ?? ''), 'pl') ? 'pl' : 'en';
+}
+function L($pl, $en) { global $LANG; return $LANG === 'en' ? $en : $pl; }
+
+function lang_switch() {
+    global $LANG;
+    $pl = '<svg viewBox="0 0 16 10" width="22" height="14"><rect width="16" height="5" fill="#fff"/><rect y="5" width="16" height="5" fill="#dc143c"/></svg>';
+    $us = '<svg viewBox="0 0 19 10" width="22" height="14"><rect width="19" height="10" fill="#b22234"/>'
+        . '<path d="M0 1.15h19M0 2.7h19M0 4.23h19M0 5.77h19M0 7.3h19M0 8.85h19" stroke="#fff" stroke-width=".77"/>'
+        . '<rect width="7.6" height="5.38" fill="#3c3b6e"/></svg>';
+    $a = fn($code, $svg, $title) => '<a href="?lang=' . $code . '" title="' . $title . '" class="' . ($LANG === $code ? 'on' : '') . '">' . $svg . '</a>';
+    return '<nav class="lang">' . $a('pl', $pl, 'Polski') . $a('en', $us, 'English') . '</nav>';
+}
+
 function beacon($args, $withErr = true) {
     $cmd = '/usr/bin/python3 ' . escapeshellarg(APP_DIR . '/beacon.py') . ' ' . $args;
     return (string)shell_exec($cmd . ($withErr ? ' 2>&1' : ' 2>/dev/null'));
@@ -53,7 +74,7 @@ function valid_date($d) {
 function parse_form($p) {
     $errors = [];
     $out = [
-        'announce' => trim($p['announce'] ?? '') ?: '{name} za {days} dni',
+        'announce' => trim($p['announce'] ?? '') ?: L('{name} za {days} dni', '{name} in {days} days'),
         'default'  => lines($p['default'] ?? ''),
         'holidays' => [],
         'events'   => [],
@@ -61,20 +82,20 @@ function parse_form($p) {
     foreach (lines($p['holidays'] ?? '') as $i => $l) {
         $f = array_map('trim', explode('|', $l, 2));
         $n = $i + 1;
-        if (count($f) < 2 || $f[1] === '') { $errors[] = "Święta, linia $n: brak tekstu po |"; continue; }
-        if (!preg_match('/^(\d{2}-\d{2}|easter([+-]\d{1,2})?|nth:\d{1,2}:[1-7]:(-1|[1-5])|thanksgiving|memorial|labor|pulaski)$/i', $f[0])) {
-            $errors[] = "Święta, linia $n: nie rozumiem daty '{$f[0]}'"; continue;
+        if (count($f) < 2 || $f[1] === '') { $errors[] = L("Wydarzenia cykliczne, linia $n: brak tekstu po |", "Recurring events, line $n: missing text after |"); continue; }
+        if (!preg_match('/^(\d{2}-\d{2}|easter|thanksgiving|memorial|labor|pulaski|fieldday|winterfieldday|nth:(\d{1,2}|\*):[1-7]:(-1|[1-5]))([+-]\d{1,2})?$/i', $f[0])) {
+            $errors[] = L("Wydarzenia cykliczne, linia $n: nie rozumiem daty '{$f[0]}'", "Recurring events, line $n: unknown date '{$f[0]}'"); continue;
         }
         $out['holidays'][] = ['date' => strtolower($f[0]), 'text' => $f[1]];
     }
     foreach (lines($p['events'] ?? '') as $i => $l) {
         $f = array_map('trim', explode('|', $l, 5));
         $n = $i + 1;
-        if (count($f) !== 5) { $errors[] = "Wydarzenia, linia $n: potrzeba 5 pól oddzielonych |"; continue; }
+        if (count($f) !== 5) { $errors[] = L("Wydarzenia jednorazowe, linia $n: potrzeba 5 pól oddzielonych |", "One-time events, line $n: 5 fields separated by | are needed"); continue; }
         [$start, $end, $ann, $name, $text] = $f;
         if ($end === '') $end = $start;
-        if (!valid_date($start) || !valid_date($end)) { $errors[] = "Wydarzenia, linia $n: data w formacie RRRR-MM-DD"; continue; }
-        if ($end < $start) { $errors[] = "Wydarzenia, linia $n: koniec przed początkiem"; continue; }
+        if (!valid_date($start) || !valid_date($end)) { $errors[] = L("Wydarzenia jednorazowe, linia $n: data w formacie RRRR-MM-DD", "One-time events, line $n: date must be YYYY-MM-DD"); continue; }
+        if ($end < $start) { $errors[] = L("Wydarzenia jednorazowe, linia $n: koniec przed początkiem", "One-time events, line $n: end is before start"); continue; }
         $out['events'][] = ['start' => $start, 'end' => $end, 'announce_days' => max(0, (int)$ann),
                             'name' => $name, 'text' => $text];
     }
@@ -133,6 +154,9 @@ select{background:#11151b;color:var(--fg);border:1px solid var(--line);border-ra
 footer{border-top:1px solid var(--line);margin-top:22px;padding:16px 0 28px;color:var(--mut);font-size:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 footer svg{width:22px;height:22px;opacity:.8}footer a{color:var(--acc);text-decoration:none}footer a:hover{text-decoration:underline}
 footer .sp{flex:1}
+.lang{display:flex;gap:6px}.lang a{display:flex;padding:3px;border-radius:5px;border:1px solid transparent;opacity:.45;line-height:0}
+.lang a svg{border-radius:2px}
+.dates{border-collapse:collapse;margin:0 0 8px}.dates td{padding:3px 12px 3px 0;vertical-align:top}.dates td:first-child{white-space:nowrap}.lang a:hover{opacity:.85}.lang a.on{opacity:1;border-color:var(--line);background:#11151b}
 CSS;
 
 $LOGO = <<<SVG
@@ -180,12 +204,12 @@ function footer_html() {
 }
 
 if (!$allowed) { http_response_code(403); ?>
-<!doctype html><html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!doctype html><html lang="<?= $LANG ?>"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= APP_NAME ?></title><style><?= $css ?></style>
 <div class="wrap" style="max-width:420px;margin-top:9vh">
 <div style="text-align:center;margin-bottom:16px"><?= str_replace('class="logo"', 'class="logo" style="width:72px;height:72px"', $LOGO) ?>
 <h1 style="margin:10px 0 2px"><?= APP_NAME ?></h1><div class="hint"><?= ORG_NAME ?></div></div>
-<div class="card"><p class="err" style="margin:0">Edytor jest dostępny tylko z sieci lokalnej.</p></div>
+<div class="card"><p class="err" style="margin:0"><?= L('Edytor jest dostępny tylko z sieci lokalnej.', 'The editor is only available from the local network.') ?></p></div>
 <?= footer_html() ?></div></html>
 <?php exit; }
 
@@ -196,7 +220,7 @@ $posted = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if (!hash_equals($_SESSION['csrf'], $_POST['csrf'] ?? '')) {
-        $err = 'Sesja wygasła - odśwież stronę.';
+        $err = L('Sesja wygasła - odśwież stronę.', 'Session expired - please reload the page.');
     } elseif ($_POST['action'] === 'save') {
         [$new, $errors] = parse_form($_POST);
         if ($errors) {
@@ -205,25 +229,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         } else {
             $json = json_encode($new, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n";
             if (file_put_contents($file, $json, LOCK_EX) === false) {
-                $err = "Nie mogę zapisać $file (uprawnienia?)";
+                $err = L("Nie mogę zapisać $file (uprawnienia?)", "Cannot write $file (permissions?)");
                 $posted = $_POST;
             } else {
                 $data = $new;
-                $msg = 'Zapisano. Następna ramka pójdzie z nowymi ustawieniami.';
+                $msg = L('Zapisano. Następna ramka pójdzie z nowymi ustawieniami.', 'Saved. The next packet will use the new settings.');
             }
         }
     } elseif ($_POST['action'] === 'add_obj' || str_starts_with($_POST['action'], 'del_obj_')) {
         $cfg = json_decode((string)@file_get_contents($cfgFile), true);
         if (!$cfg) {
-            $err = 'Nie mogę odczytać config.json';
+            $err = L('Nie mogę odczytać config.json', 'Cannot read config.json');
         } else {
             $cfg['objects'] = $cfg['objects'] ?? [];
             if ($_POST['action'] === 'add_obj') {
                 $n = count($cfg['objects']) + 1;
-                $cfg['objects'][] = ['name' => "OBIEKT$n", 'enabled' => false, 'lat' => 0, 'lon' => 0,
+                $newName = L("OBIEKT$n", "OBJECT$n");
+                $cfg['objects'][] = ['name' => $newName, 'enabled' => false, 'lat' => 0, 'lon' => 0,
                                      'symbol' => '/+', 'freq' => false, 'rotate' => false,
                                      'tone' => null, 'offset' => '', 'range_miles' => 0, 'text' => ''];
-                $msg = "Dodano obiekt OBIEKT$n. Uzupełnij nazwę, pozycję i opis, zaznacz „Nadawaj” i zapisz.";
+                $msg = L("Dodano obiekt $newName. Uzupełnij nazwę, pozycję i opis, zaznacz „Nadawaj” i zapisz.",
+                         "Added object $newName. Fill in the name, position and description, tick “Transmit” and save.");
             } else {
                 $i = (int)substr($_POST['action'], 8);
                 if (isset($cfg['objects'][$i])) {
@@ -233,18 +259,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                                                   'symbol' => $o['symbol'] ?? '/r'];
                     }
                     array_splice($cfg['objects'], $i, 1);
-                    $msg = "Usunięto obiekt {$o['name']}. Zniknie z mapy przy następnym wysłaniu.";
+                    $msg = L("Usunięto obiekt {$o['name']}. Zniknie z mapy przy następnym wysłaniu.", "Deleted object {$o['name']}. It will disappear from the map with the next transmission.");
                 }
             }
             if (file_put_contents($cfgFile, json_encode($cfg, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n", LOCK_EX) === false) {
-                $err = "Nie mogę zapisać $cfgFile (uprawnienia?)"; $msg = '';
+                $err = L("Nie mogę zapisać $cfgFile (uprawnienia?)", "Cannot write $cfgFile (permissions?)"); $msg = '';
             }
         }
     } elseif ($_POST['action'] === 'save_obj') {
         $cfg = json_decode((string)@file_get_contents($cfgFile), true);
         $errors = [];
         if (!$cfg || empty($cfg['objects'])) {
-            $errors[] = 'Nie mogę odczytać config.json';
+            $errors[] = L('Nie mogę odczytać config.json', 'Cannot read config.json');
         } else {
             foreach ($cfg['objects'] as $i => &$o) {
                 $in = $_POST['obj'][$i] ?? null;
@@ -254,7 +280,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 // nazwa obiektu (1-9 znakow ASCII)
                 $name = trim($in['name'] ?? $o['name']);
                 if (!preg_match('/^[\x21-\x7e][\x20-\x7e]{0,8}$/', $name) || strpbrk($name, '*_|~') !== false) {
-                    $errors[] = "$label: nazwa obiektu 1-9 znaków, bez polskich liter i bez * _ | ~";
+                    $errors[] = "$label: " . L('nazwa obiektu 1-9 znaków, bez polskich liter i bez * _ | ~', 'object name must be 1-9 plain ASCII characters, without * _ | ~');
                 } elseif ($name !== $o['name']) {
                     // stara nazwa zostanie usunieta z mapy przy nastepnym wyslaniu
                     // (tylko jesli obiekt mial juz pozycje, czyli mogl byc wyslany)
@@ -274,18 +300,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $o['lat'] = round((float)$m[1], 5);
                     $o['lon'] = round((float)$m[2], 5);
                 } else {
-                    $errors[] = "$label: pozycja np. 41.9108, -87.6779 (szerokość, długość; zachód z minusem)";
+                    $errors[] = "$label: " . L('pozycja np. 41.9108, -87.6779 (szerokość, długość; zachód z minusem)', 'position e.g. 41.9108, -87.6779 (latitude, longitude; west is negative)');
                 }
 
                 // ikona: z listy albo wlasna (2 znaki: tablica + symbol)
                 $sym = ($in['symbol'] ?? '') === 'custom' ? trim($in['symbol_custom'] ?? '') : ($in['symbol'] ?? '');
                 if (preg_match('/^[\/\\\\A-Z0-9][\x21-\x7e]$/', $sym)) $o['symbol'] = $sym;
-                else $errors[] = "$label: ikona to 2 znaki, np. /r";
+                else $errors[] = "$label: " . L('ikona to 2 znaki, np. /r', 'icon is 2 characters, e.g. /r');
 
                 $tone =trim(str_replace(',', '.', $in['tone'] ?? ''));
                 if ($tone === '' || strtolower($tone) === 'off') $o['tone'] = null;
                 elseif (is_numeric($tone) && $tone >= 60 && $tone <= 260) $o['tone'] = (float)$tone;
-                else $errors[] = "$label: ton musi być liczbą, np. 114.8 (albo pusty = bez tonu)";
+                else $errors[] = "$label: " . L('ton musi być liczbą, np. 114.8 (albo pusty = bez tonu)', 'tone must be a number, e.g. 114.8 (empty = no tone)');
                 // przyjmuje "+5", "-0.6" (MHz) albo "+500", "-060" (format APRS, po 10 kHz)
                 $off = str_replace([',', ' ', 'MHz', 'mhz'], ['.', '', '', ''], trim($in['offset'] ?? ''));
                 if ($off === '') {
@@ -295,11 +321,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     $units = $v <= 10 ? (int)round($v * 100) : (int)$v;
                     $o['offset'] = ($m[1] === '-' ? '-' : '+') . str_pad((string)$units, 3, '0', STR_PAD_LEFT);
                 } else {
-                    $errors[] = "$label: offset np. +5 albo -0.6 (MHz), albo pusty";
+                    $errors[] = "$label: " . L('offset np. +5 albo -0.6 (MHz), albo pusty', 'offset e.g. +5 or -0.6 (MHz), or empty');
                 }
                 $rng = trim($in['range'] ?? '');
                 if ($rng === '' || ctype_digit($rng)) $o['range_miles'] = $rng === '' ? 0 : (int)$rng;
-                else $errors[] = "$label: zasięg to liczba mil";
+                else $errors[] = "$label: " . L('zasięg to liczba mil', 'range must be a number of miles');
                 $o['text'] = trim(preg_replace('/\s+/', ' ', $in['text'] ?? ''));
                 $o['enabled'] = !empty($in['enabled']);
                 $o['freq'] = !empty($in['freq']);
@@ -307,14 +333,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             }
             unset($o);
             $names = array_column($cfg['objects'], 'name');
-            if (count($names) !== count(array_unique($names))) $errors[] = 'Dwa obiekty nie mogą mieć tej samej nazwy.';
+            if (count($names) !== count(array_unique($names))) $errors[] = L('Dwa obiekty nie mogą mieć tej samej nazwy.', 'Two objects cannot have the same name.');
         }
         if ($errors) {
             $err = implode("\n", $errors);
         } elseif (file_put_contents($cfgFile, json_encode($cfg, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n", LOCK_EX) === false) {
-            $err = "Nie mogę zapisać $cfgFile (uprawnienia?)";
+            $err = L("Nie mogę zapisać $cfgFile (uprawnienia?)", "Cannot write $cfgFile (permissions?)");
         } else {
-            $msg = 'Zapisano obiekty.';
+            $msg = L('Zapisano obiekty.', 'Objects saved.');
         }
     } elseif ($_POST['action'] === 'save_station') {
         $cfg = json_decode((string)@file_get_contents($cfgFile), true);
@@ -322,12 +348,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $pass = trim($_POST['passcode'] ?? '');
         $server = trim($_POST['server'] ?? '') ?: 'rotate.aprs2.net';
         $errors = [];
-        if (!$cfg) $errors[] = 'Nie mogę odczytać config.json';
+        if (!$cfg) $errors[] = L('Nie mogę odczytać config.json', 'Cannot read config.json');
         if (!preg_match('/^[A-Z0-9]{3,6}(-([0-9]|1[0-5]))?$/', $call) || !preg_match('/\d/', explode('-', $call)[0])) {
-            $errors[] = 'Znak np. W9GIL-10 (SSID 0-15, opcjonalny)';
+            $errors[] = L('Znak np. W9GIL-10 (SSID 0-15, opcjonalny)', 'Callsign e.g. W9GIL-10 (SSID 0-15, optional)');
         }
-        if ($pass !== '' && !preg_match('/^\d{1,5}$/', $pass)) $errors[] = 'Passcode to liczba (albo puste = automatycznie)';
-        if (!preg_match('/^[a-z0-9.-]+$/i', $server)) $errors[] = 'Nieprawidłowy adres serwera';
+        if ($pass !== '' && !preg_match('/^\d{1,5}$/', $pass)) $errors[] = L('Passcode to liczba (albo puste = automatycznie)', 'Passcode is a number (or empty = automatic)');
+        if (!preg_match('/^[a-z0-9.-]+$/i', $server)) $errors[] = L('Nieprawidłowy adres serwera', 'Invalid server address');
         if ($errors) {
             $err = implode("\n", $errors);
         } else {
@@ -335,15 +361,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $cfg['passcode'] = ($pass !== '' && (int)$pass !== aprs_passcode($call)) ? $pass : '';   // '' = auto
             $cfg['server'] = $server;
             if (file_put_contents($cfgFile, json_encode($cfg, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n", LOCK_EX) === false) {
-                $err = "Nie mogę zapisać $cfgFile (uprawnienia?)";
+                $err = L("Nie mogę zapisać $cfgFile (uprawnienia?)", "Cannot write $cfgFile (permissions?)");
             } else {
-                $msg = "Zapisano stację $call.";
+                $msg = L("Zapisano stację $call.", "Station $call saved.");
             }
         }
     } elseif ($_POST['action'] === 'save_wx') {
         $cfg = json_decode((string)@file_get_contents($cfgFile), true);
         if (!$cfg) {
-            $err = 'Nie mogę odczytać config.json';
+            $err = L('Nie mogę odczytać config.json', 'Cannot read config.json');
         } else {
             $w = $cfg['weather'] ?? [];
             $key = trim($_POST['wx_key'] ?? '');
@@ -355,13 +381,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             $cfg['weather'] = $w;
             @unlink(APP_DIR . '/weather_cache.json');           // nowe ustawienia = pobierz od nowa
             if (file_put_contents($cfgFile, json_encode($cfg, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . "\n", LOCK_EX) === false) {
-                $err = "Nie mogę zapisać $cfgFile (uprawnienia?)";
+                $err = L("Nie mogę zapisać $cfgFile (uprawnienia?)", "Cannot write $cfgFile (permissions?)");
             } else {
-                $msg = 'Zapisano ustawienia pogody.';
+                $msg = L('Zapisano ustawienia pogody.', 'Weather settings saved.');
             }
         }
     } elseif ($_POST['action'] === 'send') {
-        $msg = "Wysłane teraz:\n" . trim(beacon(''));
+        $msg = L("Wysłane teraz:", "Sent now:") . "\n" . trim(beacon(''));
     }
 }
 
@@ -371,7 +397,7 @@ if ($posted) {
           'holidays' => $posted['holidays'] ?? '', 'events' => $posted['events'] ?? ''];
 } else {
     $f = [
-        'announce' => $data['announce'] ?? '{name} za {days} dni',
+        'announce' => $data['announce'] ?? L('{name} za {days} dni', '{name} in {days} days'),
         'default'  => implode("\n", $data['default'] ?? []),
         'holidays' => implode("\n", array_map(fn($x) => "{$x['date']} | {$x['text']}", $data['holidays'] ?? [])),
         'events'   => implode("\n", array_map(fn($x) => "{$x['start']} | {$x['end']} | {$x['announce_days']} | {$x['name']} | {$x['text']}", $data['events'] ?? [])),
@@ -380,26 +406,27 @@ if ($posted) {
 
 $cfgView = json_decode((string)@file_get_contents($cfgFile), true) ?: [];
 $SYMBOLS = [
-    '/r' => 'Przemiennik (antena)',
+    '/r' => L('Przemiennik (antena)', 'Repeater (antenna)'),
     '/#' => 'Digipeater',
-    '/&' => 'Bramka (gateway)',
-    '/-' => 'Dom / QTH',
-    '/y' => 'Antena Yagi na QTH',
-    '/_' => 'Stacja pogodowa',
-    '/o' => 'EOC / centrum kryzysowe',
-    '/c' => 'Stanowisko dowodzenia (ICP)',
-    '/+' => 'Punkt medyczny / Czerwony Krzyż',
-    '/h' => 'Szpital',
-    '/a' => 'Karetka',
-    '/:' => 'Straż pożarna',
-    '/!' => 'Policja',
-    '/E' => 'Wydarzenie (oko)',
-    '/;' => 'Praca terenowa (namiot)',
-    '/K' => 'Szkoła',
+    '/&' => L('Bramka (gateway)', 'Gateway'),
+    '/-' => L('Dom / QTH', 'House / QTH'),
+    '/y' => L('Antena Yagi na QTH', 'Yagi at QTH'),
+    '/_' => L('Stacja pogodowa', 'Weather station'),
+    '/o' => L('EOC / centrum kryzysowe', 'EOC'),
+    '/c' => L('Stanowisko dowodzenia (ICP)', 'Incident command post'),
+    '/+' => L('Punkt medyczny / Czerwony Krzyż', 'First aid / Red Cross'),
+    '/h' => L('Szpital', 'Hospital'),
+    '/a' => L('Karetka', 'Ambulance'),
+    '/:' => L('Straż pożarna', 'Fire'),
+    '/!' => L('Policja', 'Police'),
+    '/E' => L('Wydarzenie (oko)', 'Event (eyeball)'),
+    '/;' => L('Praca terenowa (namiot)', 'Field ops (tent)'),
+    '/K' => L('Szkoła', 'School'),
 ];
 $prev = json_decode(beacon('--dry-run --json', false), true);
 $limit = (int)($prev['max_text'] ?? 33);
-$srcName = ['event' => 'wydarzenie', 'announce' => 'zapowiedź', 'holiday' => 'święto', 'default' => 'rotacja', 'none' => 'brak', 'fixed' => 'stały opis'];
+$srcName = ['event' => L('wydarzenie', 'event'), 'announce' => L('zapowiedź', 'countdown'), 'holiday' => L('cykliczne', 'recurring'),
+            'default' => L('rotacja', 'rotation'), 'none' => L('brak', 'none'), 'fixed' => L('stały opis', 'fixed text')];
 
 // status nadawania
 $timerOn = trim((string)shell_exec('systemctl is-active aprs-beacon.timer 2>/dev/null')) === 'active';
@@ -409,67 +436,69 @@ $now = time();
 $nextTs = $now - ($now % 600) + 180; if ($nextTs <= $now) $nextTs += 600;   // timer: :03, :13, :23...
 function ago($ts) {
     $d = time() - $ts;
-    if ($d < 60) return 'przed chwilą';
-    if ($d < 3600) return floor($d / 60) . ' min temu';
-    if ($d < 86400) return floor($d / 3600) . ' h temu';
+    if ($d < 60) return L('przed chwilą', 'just now');
+    if ($d < 3600) return floor($d / 60) . L(' min temu', ' min ago');
+    if ($d < 86400) return floor($d / 3600) . L(' h temu', ' h ago');
     return date('Y-m-d H:i', $ts);
 }
 $showErr = $lastErr && (!$last || $lastErr['ts'] > $last['ts']);
 ?>
-<!doctype html><html lang="pl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<!doctype html><html lang="<?= $LANG ?>"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title><?= APP_NAME ?></title><style><?= $css ?></style>
 <div class="wrap">
 <header class="top">
   <?= $LOGO ?>
   <div class="brand"><h1><?= APP_NAME ?></h1>
-    <div class="sub">nadawca <b><?= h($cfgView['callsign'] ?? '?') ?></b></div></div>
-  <span class="pill <?= $timerOn ? 'on' : 'off' ?>"><span class="dot"></span><?= $timerOn ? 'NA ANTENIE' : 'TIMER WYŁĄCZONY' ?></span>
+    <div class="sub"><?= L('nadawca', 'sender') ?> <b><?= h($cfgView['callsign'] ?? '?') ?></b></div></div>
+  <span class="pill <?= $timerOn ? 'on' : 'off' ?>"><span class="dot"></span><?= $timerOn ? L('NA ANTENIE', 'ON AIR') : L('TIMER WYŁĄCZONY', 'TIMER OFF') ?></span>
+  <?= lang_switch() ?>
 </header>
 
 <?php if ($msg) echo '<div class="card msg"><pre>' . h($msg) . '</pre></div>'; ?>
 <?php if ($err) echo '<div class="card err" style="white-space:pre-line">' . h($err) . '</div>'; ?>
 <?php if ($prev && empty($prev['configured'])) { ?>
 <div class="card" style="border-color:#7a5a1e;background:#2a2416">
-<h2 style="color:#f2c94c">Pierwsze uruchomienie</h2>
-<p style="margin:0">Wpisz swój <b>znak</b> w sekcji „Stacja nadawcza” i <b>pozycję</b> obiektu poniżej.
-Dopóki tego nie zrobisz, beacon nic nie wysyła.</p></div>
+<h2 style="color:#f2c94c"><?= L('Pierwsze uruchomienie', 'First run') ?></h2>
+<p style="margin:0"><?= L('Wpisz swój <b>znak</b> w sekcji „Stacja nadawcza” i <b>pozycję</b> obiektu poniżej. Dopóki tego nie zrobisz, beacon nic nie wysyła.',
+ 'Enter your <b>callsign</b> under “Station” and the object’s <b>position</b> below. Nothing is transmitted until you do.') ?></p></div>
 <?php } ?>
 
 <div class="card air">
-<h2><?= icon('air') ?>Teraz w eterze</h2>
+<h2><?= icon('air') ?><?= L('Teraz w eterze', 'On the air now') ?></h2>
 <div class="stats">
-  <span>Ostatnio wysłano: <b><?= $last ? h(date('H:i', $last['ts'])) . ' (' . ago($last['ts']) . ')' : '—' ?></b></span>
-  <span>Następne: <b><?= $timerOn ? h(date('H:i', $nextTs)) : 'wyłączone' ?></b></span>
-  <span>Co: <b>10 min</b></span>
+  <span><?= L('Ostatnio wysłano', 'Last sent') ?>: <b><?= $last ? h(date('H:i', $last['ts'])) . ' (' . ago($last['ts']) . ')' : '—' ?></b></span>
+  <span><?= L('Następne', 'Next') ?>: <b><?= $timerOn ? h(date('H:i', $nextTs)) : L('wyłączone', 'off') ?></b></span>
+  <span><?= L('Co', 'Every') ?>: <b>10 min</b></span>
 </div>
-<?php if ($showErr) echo '<p class="err" style="margin:0 0 8px">Ostatnia próba (' . h(ago($lastErr['ts'])) . '): ' . h($lastErr['error']) . '</p>'; ?>
+<?php if ($showErr) echo '<p class="err" style="margin:0 0 8px">' . L('Ostatnia próba', 'Last attempt') . ' (' . h(ago($lastErr['ts'])) . '): ' . h($lastErr['error']) . '</p>'; ?>
 <?php if (!$prev) {
     // diagnostyka: dlaczego beacon.py nie odpowiada
     $why = [];
     $dis = array_map('trim', explode(',', (string)ini_get('disable_functions')));
-    if (in_array('shell_exec', $dis, true)) $why[] = 'PHP ma wyłączoną funkcję shell_exec (disable_functions w php.ini).';
+    if (in_array('shell_exec', $dis, true)) $why[] = L('PHP ma wyłączoną funkcję shell_exec (disable_functions w php.ini).', 'PHP has shell_exec disabled (disable_functions in php.ini).');
     $who = function_exists('posix_geteuid') ? (posix_getpwuid(posix_geteuid())['name'] ?? '?') : trim((string)@shell_exec('whoami'));
-    if (!is_file(APP_DIR . '/beacon.py')) $why[] = 'Brak pliku ' . APP_DIR . '/beacon.py.';
-    elseif (!is_readable(APP_DIR . '/config.json')) $why[] = "Użytkownik serwera WWW ($who) nie może odczytać " . APP_DIR . '/config.json.';
+    if (!is_file(APP_DIR . '/beacon.py')) $why[] = L('Brak pliku ', 'Missing file ') . APP_DIR . '/beacon.py.';
+    elseif (!is_readable(APP_DIR . '/config.json')) $why[] = L("Użytkownik serwera WWW ($who) nie może odczytać ", "The web server user ($who) cannot read ") . APP_DIR . '/config.json.';
     $out = in_array('shell_exec', $dis, true) ? '' : trim(beacon('--dry-run', true));
-    echo '<p class="err" style="margin-bottom:6px">Nie mogę uruchomić beacon.py.</p>';
+    echo '<p class="err" style="margin-bottom:6px">' . L('Nie mogę uruchomić beacon.py.', 'Cannot run beacon.py.') . '</p>';
     foreach ($why as $w) echo '<p class="err" style="margin:2px 0">• ' . h($w) . '</p>';
     if ($out !== '') echo '<div class="term">' . h($out) . '</div>';
-    echo '<p class="hint">Serwer WWW działa jako <b>' . h($who ?: '?') . '</b>. Uruchom ponownie instalator, a sam dopasuje uprawnienia.</p>';
+    echo '<p class="hint">' . L('Serwer WWW działa jako', 'The web server runs as') . ' <b>' . h($who ?: '?') . '</b>. '
+       . L('Uruchom ponownie instalator, a sam dopasuje uprawnienia.', 'Run the installer again and it will fix the permissions.') . '</p>';
 }
 else foreach ($prev['packets'] as $p) { ?>
   <p style="margin:4px 0"><span class="tag"><?= h($srcName[$p['source']] ?? $p['source']) ?></span><b><?= h($p['name']) ?></b><?= $p['text'] !== '' ? ' - ' . h($p['text']) : '' ?>
-  <?php if ($p['truncated']) echo ' <span class="err">(ucięte)</span>'; ?></p>
+  <?php if ($p['truncated']) echo ' <span class="err">(' . L('ucięte', 'truncated') . ')</span>'; ?></p>
   <div class="term"><?= colorize($p['packet']) ?></div>
 <?php } ?>
 <div class="row" style="justify-content:space-between">
   <div class="legend">
-    <span><i style="background:#f2c94c"></i>nadawca</span><span><i style="background:#3fa7ff"></i>obiekt</span>
-    <span><i style="background:#9b8cff"></i>czas UTC</span><span><i style="background:#56d4c2"></i>pozycja</span>
-    <span><i style="background:#ff9f43"></i>ikona</span><span><i style="background:#e6e9ee"></i>komentarz</span>
+    <span><i style="background:#f2c94c"></i><?= L('nadawca', 'sender') ?></span><span><i style="background:#3fa7ff"></i><?= L('obiekt', 'object') ?></span>
+    <span><i style="background:#9b8cff"></i><?= L('czas UTC', 'UTC time') ?></span><span><i style="background:#56d4c2"></i><?= L('pozycja', 'position') ?></span>
+    <span><i style="background:#ff9f43"></i><?= L('ikona', 'icon') ?></span><span><i style="background:#e6e9ee"></i><?= L('komentarz', 'comment') ?></span>
   </div>
   <form method="post" style="margin:0"><input type="hidden" name="csrf" value="<?= h($_SESSION['csrf']) ?>">
-  <button name="action" value="send">Wyślij teraz</button></form>
+  <button name="action" value="send"><?= L('Wyślij teraz', 'Send now') ?></button></form>
 </div>
 </div>
 
@@ -482,93 +511,96 @@ $stManual = $stPass !== '' && $stCall && (int)$stPass !== $stAuto;
 <form method="post">
 <input type="hidden" name="csrf" value="<?= h($_SESSION['csrf']) ?>">
 <div class="card">
-<h2><?= icon('radio') ?>Stacja nadawcza</h2>
-<p class="hint">Znak, z którego wysyłane są obiekty. Na mapie widać nazwę obiektu, a znak pojawia się jako „reported by”.</p>
+<h2><?= icon('radio') ?><?= L('Stacja nadawcza', 'Station') ?></h2>
+<p class="hint"><?= L('Znak, z którego wysyłane są obiekty. Na mapie widać nazwę obiektu, a znak pojawia się jako „reported by”.',
+ 'The callsign that sends the objects. The map shows the object name; your callsign appears as “reported by”.') ?></p>
 <div class="row" style="align-items:flex-end">
-  <label>Znak z SSID <input type="text" name="callsign" value="<?= h($stCall) ?>" placeholder="W9GIL-10" style="width:140px;text-transform:uppercase" maxlength="9"></label>
+  <label><?= L('Znak z SSID', 'Callsign with SSID') ?> <input type="text" name="callsign" value="<?= h($stCall) ?>" placeholder="W9GIL-10" style="width:140px;text-transform:uppercase" maxlength="9"></label>
   <label>Passcode APRS-IS <input type="text" name="passcode" value="<?= $stManual ? h($stPass) : '' ?>" placeholder="auto: <?= h($stAuto) ?>" style="width:130px" inputmode="numeric"></label>
-  <label style="flex:1;min-width:180px">Serwer APRS-IS <input type="text" name="server" value="<?= h($cfgView['server'] ?? 'rotate.aprs2.net') ?>"></label>
+  <label style="flex:1;min-width:180px"><?= L('Serwer APRS-IS', 'APRS-IS server') ?> <input type="text" name="server" value="<?= h($cfgView['server'] ?? 'rotate.aprs2.net') ?>"></label>
 </div>
-<p class="hint" style="margin-top:8px">Passcode liczy się sam ze znaku (bez SSID). Zostaw puste, chyba że chcesz wpisać inny.
-<?= $stManual ? '<span class="err">Teraz używany jest passcode wpisany ręcznie.</span>' : '' ?></p>
-<p style="margin-bottom:0"><button name="action" value="save_station">Zapisz stację</button></p>
+<p class="hint" style="margin-top:8px"><?= L('Passcode liczy się sam ze znaku (bez SSID). Zostaw puste, chyba że chcesz wpisać inny.',
+ 'The passcode is calculated from your callsign (without SSID). Leave it empty unless you need a different one.') ?>
+<?= $stManual ? '<span class="err">' . L('Teraz używany jest passcode wpisany ręcznie.', 'A manually entered passcode is in use.') . '</span>' : '' ?></p>
+<p style="margin-bottom:0"><button name="action" value="save_station"><?= L('Zapisz stację', 'Save station') ?></button></p>
 </div>
 </form>
 
 <form method="post">
 <input type="hidden" name="csrf" value="<?= h($_SESSION['csrf']) ?>">
 <!-- Enter w polu = zapis (a nie pierwszy przycisk „Usuń”) -->
-<button name="action" value="save_obj" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px">Zapisz</button>
+<button name="action" value="save_obj" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px"><?= L('Zapisz', 'Save') ?></button>
 <?php foreach (($cfgView['objects'] ?? []) as $i => $o) { ?>
 <div class="card">
 <div class="row" style="justify-content:space-between;align-items:center;margin-bottom:6px">
-<h2 style="margin:0"><?= icon('pin') ?>Obiekt <?= h($o['name']) ?><?= ($o['enabled'] ?? true) ? '' : ' <span class="tag" style="margin-left:4px">wyłączony</span>' ?></h2>
-<button class="sec" name="action" value="del_obj_<?= $i ?>" onclick="return confirm('Usunąć obiekt <?= h($o['name']) ?>? Zniknie też z mapy.')" style="padding:5px 11px;font-size:12px">Usuń</button>
+<h2 style="margin:0"><?= icon('pin') ?><?= L('Obiekt', 'Object') ?> <?= h($o['name']) ?><?= ($o['enabled'] ?? true) ? '' : ' <span class="tag" style="margin-left:4px">' . L('wyłączony', 'disabled') . '</span>' ?></h2>
+<button class="sec" name="action" value="del_obj_<?= $i ?>" onclick="return confirm(<?= h(json_encode(L('Usunąć obiekt ' . $o['name'] . '? Zniknie też z mapy.', 'Delete object ' . $o['name'] . '? It will also be removed from the map.'))) ?>)" style="padding:5px 11px;font-size:12px"><?= L('Usuń', 'Delete') ?></button>
 </div>
 <?php $sym = $o['symbol'] ?? '/r'; $isCustom = !isset($SYMBOLS[$sym]); ?>
 <div class="row" style="align-items:flex-end">
-  <label>Nazwa na mapie <input type="text" name="obj[<?= $i ?>][name]" value="<?= h($o['name']) ?>" maxlength="9" style="width:120px"></label>
-  <label style="flex:1;min-width:220px">Pozycja (szer., dł.)
-    <input type="text" name="obj[<?= $i ?>][pos]" value="<?= (empty($o['lat']) && empty($o['lon'])) ? '' : h($o['lat'] . ', ' . $o['lon']) ?>" placeholder="np. 41.9108, -87.6779"></label>
+  <label><?= L('Nazwa na mapie', 'Name on map') ?> <input type="text" name="obj[<?= $i ?>][name]" value="<?= h($o['name']) ?>" maxlength="9" style="width:120px"></label>
+  <label style="flex:1;min-width:220px"><?= L('Pozycja (szer., dł.)', 'Position (lat, lon)') ?>
+    <input type="text" name="obj[<?= $i ?>][pos]" value="<?= (empty($o['lat']) && empty($o['lon'])) ? '' : h($o['lat'] . ', ' . $o['lon']) ?>" placeholder="<?= L('np.', 'e.g.') ?> 41.9108, -87.6779"></label>
 </div>
-<p class="hint" style="margin-top:6px">Pozycję skopiuj z Google Maps: prawy klik na miejscu → kliknij w liczby → wklej tutaj.
-<a href="https://www.google.com/maps?q=<?= h(($o['lat'] ?? '') . ',' . ($o['lon'] ?? '')) ?>" target="_blank" style="color:var(--acc)">Pokaż obecną na mapie</a>.
-Zmiana nazwy usunie starą nazwę z mapy przy następnym wysłaniu.</p>
+<p class="hint" style="margin-top:6px"><?= L('Pozycję skopiuj z Google Maps: prawy klik na miejscu → kliknij w liczby → wklej tutaj.', 'Copy the position from Google Maps: right-click the spot → click the numbers → paste here.') ?>
+<a href="https://www.google.com/maps?q=<?= h(($o['lat'] ?? '') . ',' . ($o['lon'] ?? '')) ?>" target="_blank" style="color:var(--acc)"><?= L('Pokaż obecną na mapie', 'Show current on map') ?></a>.
+<?= L('Zmiana nazwy usunie starą nazwę z mapy przy następnym wysłaniu.', 'Renaming removes the old name from the map with the next transmission.') ?></p>
 <div class="row" style="margin-bottom:10px">
-  <label>Ikona
+  <label><?= L('Ikona', 'Icon') ?>
     <select name="obj[<?= $i ?>][symbol]" onchange="this.parentNode.nextElementSibling.style.display=this.value==='custom'?'':'none'"
      >
       <?php foreach ($SYMBOLS as $code => $desc) { ?>
         <option value="<?= h($code) ?>" <?= $sym === $code ? 'selected' : '' ?>><?= h("$desc  ($code)") ?></option>
       <?php } ?>
-      <option value="custom" <?= $isCustom ? 'selected' : '' ?>>Inna (wpisz kod)</option>
+      <option value="custom" <?= $isCustom ? 'selected' : '' ?>><?= L('Inna (wpisz kod)', 'Other (enter code)') ?></option>
     </select></label>
-  <label style="<?= $isCustom ? '' : 'display:none' ?>">Kod <input type="text" name="obj[<?= $i ?>][symbol_custom]" value="<?= h($sym) ?>" maxlength="2" style="width:60px"></label>
+  <label style="<?= $isCustom ? '' : 'display:none' ?>"><?= L('Kod', 'Code') ?> <input type="text" name="obj[<?= $i ?>][symbol_custom]" value="<?= h($sym) ?>" maxlength="2" style="width:60px"></label>
 </div>
-<p class="hint">Stały opis wysyłany zawsze. Wpisz <code>{wx}</code>, żeby dodać pogodę.</p>
-<input type="text" name="obj[<?= $i ?>][text]" value="<?= h($o['text'] ?? '') ?>" placeholder="np. FM Poland TG3109312 Group312Chicago.org albo: First Aid - Medical Tent">
+<p class="hint"><?= L('Stały opis wysyłany zawsze. Wpisz <code>{wx}</code>, żeby dodać pogodę.', 'Fixed description, always sent. Type <code>{wx}</code> to add the weather.') ?></p>
+<input type="text" name="obj[<?= $i ?>][text]" value="<?= h($o['text'] ?? '') ?>" placeholder="<?= L('np. FM Poland TG3109312 Group312Chicago.org albo: First Aid - Medical Tent', 'e.g. FM Poland TG3109312 Group312Chicago.org or: First Aid - Medical Tent') ?>">
 <?php $isFreq = $o['freq'] ?? true; ?>
 <div class="row" style="margin-top:12px;gap:18px">
-  <label class="chk" style="padding:0"><input type="checkbox" name="obj[<?= $i ?>][enabled]" value="1" <?= ($o['enabled'] ?? true) ? 'checked' : '' ?>> Nadawaj</label>
-  <label class="chk" style="padding:0"><input type="checkbox" name="obj[<?= $i ?>][rotate]" value="1" <?= ($o['rotate'] ?? true) ? 'checked' : '' ?>> Doklejaj zmienny komentarz (święta, wydarzenia, rotacja)</label>
+  <label class="chk" style="padding:0"><input type="checkbox" name="obj[<?= $i ?>][enabled]" value="1" <?= ($o['enabled'] ?? true) ? 'checked' : '' ?>> <?= L('Nadawaj', 'Transmit') ?></label>
+  <label class="chk" style="padding:0"><input type="checkbox" name="obj[<?= $i ?>][rotate]" value="1" <?= ($o['rotate'] ?? true) ? 'checked' : '' ?>> <?= L('Doklejaj zmienny komentarz (wydarzenia, rotacja)', 'Add the changing comment (events, rotation)') ?></label>
   <label class="chk" style="padding:0"><input type="checkbox" name="obj[<?= $i ?>][freq]" value="1" <?= $isFreq ? 'checked' : '' ?>
-    onchange="this.closest('.card').querySelector('.freq').style.display=this.checked?'':'none'"> To przemiennik (ton, offset, zasięg)</label>
+    onchange="this.closest('.card').querySelector('.freq').style.display=this.checked?'':'none'"> <?= L('To przemiennik (ton, offset, zasięg)', 'This is a repeater (tone, offset, range)') ?></label>
 </div>
 <div class="freq" style="<?= $isFreq ? '' : 'display:none' ?>">
 <div class="row" style="margin-top:10px">
-  <label>Ton <input type="text" name="obj[<?= $i ?>][tone]" value="<?= h($o['tone'] ?? '') ?>" style="width:90px" placeholder="114.8"></label>
+  <label><?= L('Ton', 'Tone') ?> <input type="text" name="obj[<?= $i ?>][tone]" value="<?= h($o['tone'] ?? '') ?>" style="width:90px" placeholder="114.8"></label>
   <label>Offset <input type="text" name="obj[<?= $i ?>][offset]" value="<?= h($o['offset'] ?? '') ?>" style="width:90px" placeholder="+5"></label>
-  <label>Zasięg (mi) <input type="text" name="obj[<?= $i ?>][range]" value="<?= h($o['range_miles'] ?? '') ?>" style="width:70px"></label>
+  <label><?= L('Zasięg (mi)', 'Range (mi)') ?> <input type="text" name="obj[<?= $i ?>][range]" value="<?= h($o['range_miles'] ?? '') ?>" style="width:70px"></label>
 </div>
-<p class="hint" style="margin-top:8px">Nazwa obiektu przemiennika to zwykle jego częstotliwość, np. <code>441.675+</code>. Ton pusty = bez tonu. Offset w MHz, np. <code>+5</code> albo <code>-0.6</code>, pusty = standardowy.</p>
+<p class="hint" style="margin-top:8px"><?= L('Nazwa obiektu przemiennika to zwykle jego częstotliwość, np. <code>441.675+</code>. Ton pusty = bez tonu. Offset w MHz, np. <code>+5</code> albo <code>-0.6</code>, pusty = standardowy.',
+ 'A repeater object is usually named after its frequency, e.g. <code>441.675+</code>. Empty tone = no tone. Offset in MHz, e.g. <code>+5</code> or <code>-0.6</code>, empty = standard.') ?></p>
 </div>
-<p style="margin-top:12px"><button name="action" value="save_obj">Zapisz obiekty</button></p>
+<p style="margin-top:12px"><button name="action" value="save_obj"><?= L('Zapisz obiekty', 'Save objects') ?></button></p>
 </div>
 <?php } ?>
-<p><button class="sec" name="action" value="add_obj">+ Dodaj obiekt</button>
-<span class="hint" style="margin-left:8px">np. punkt medyczny, stanowisko dowodzenia, stacja na imprezie</span></p>
+<p><button class="sec" name="action" value="add_obj">+ <?= L('Dodaj obiekt', 'Add object') ?></button>
+<span class="hint" style="margin-left:8px"><?= L('np. punkt medyczny, stanowisko dowodzenia, stacja na imprezie', 'e.g. first aid point, command post, event station') ?></span></p>
 </form>
 
 <?php $wx = $cfgView['weather'] ?? []; $hasKey = !empty($wx['api_key']); ?>
 <form method="post">
 <input type="hidden" name="csrf" value="<?= h($_SESSION['csrf']) ?>">
 <div class="card">
-<h2><?= icon('cloud') ?>Pogoda (OpenWeather)</h2>
-<p class="hint">Wpisz <code>{wx}</code> w dowolny komentarz albo w stały opis, a w to miejsce wstawi się aktualna pogoda.
-Klucz API: openweathermap.org → My API keys (nowy klucz aktywuje się do 2 godzin).</p>
+<h2><?= icon('cloud') ?><?= L('Pogoda', 'Weather') ?> (OpenWeather)</h2>
+<p class="hint"><?= L('Wpisz <code>{wx}</code> w dowolny komentarz albo w stały opis, a w to miejsce wstawi się aktualna pogoda. Klucz API: openweathermap.org → My API keys (nowy klucz aktywuje się do 2 godzin).',
+ 'Type <code>{wx}</code> in any comment or fixed description to insert the current weather. API key: openweathermap.org → My API keys (a new key can take up to 2 hours to activate).') ?></p>
 <input type="password" name="wx_key" autocomplete="off"
-  placeholder="<?= $hasKey ? 'Klucz zapisany (…' . h(substr($wx['api_key'], -4)) . ') – zostaw puste, żeby nie zmieniać' : 'Wklej klucz API' ?>">
+  placeholder="<?= $hasKey ? L('Klucz zapisany', 'Key saved') . ' (…' . h(substr($wx['api_key'], -4)) . ') – ' . L('zostaw puste, żeby nie zmieniać', 'leave empty to keep it') : L('Wklej klucz API', 'Paste API key') ?>">
 <div class="row" style="margin-top:10px">
-  <label>Jednostki
+  <label><?= L('Jednostki', 'Units') ?>
     <select name="wx_units">
       <option value="imperial" <?= ($wx['units'] ?? 'imperial') === 'imperial' ? 'selected' : '' ?>>°F, mph, in</option>
       <option value="metric" <?= ($wx['units'] ?? '') === 'metric' ? 'selected' : '' ?>>°C, m/s, mm</option>
     </select></label>
-  <label>Odświeżaj co (min) <input type="text" name="wx_refresh" value="<?= h($wx['refresh_minutes'] ?? 60) ?>" style="width:70px"></label>
+  <label><?= L('Odświeżaj co (min)', 'Refresh every (min)') ?> <input type="text" name="wx_refresh" value="<?= h($wx['refresh_minutes'] ?? 60) ?>" style="width:70px"></label>
 </div>
-<p class="hint" style="margin-top:10px">Szablon: <code>{temp}</code> <code>{press}</code> <code>{wind}</code> <code>{clouds}</code> <code>{precip}</code> <code>{hum}</code> <code>{desc}</code>. Opad pokazuje się tylko, gdy pada.</p>
+<p class="hint" style="margin-top:10px"><?= L('Szablon', 'Template') ?>: <code>{temp}</code> <code>{press}</code> <code>{wind}</code> <code>{clouds}</code> <code>{precip}</code> <code>{hum}</code> <code>{desc}</code>. <?= L('Opad pokazuje się tylko, gdy pada.', 'Precipitation only shows when it rains or snows.') ?></p>
 <input type="text" name="wx_template" value="<?= h($wx['template'] ?? 'WX {temp} {press} {wind} chm{clouds} {precip}') ?>">
-<p><button name="action" value="save_wx">Zapisz pogodę</button></p>
+<p><button name="action" value="save_wx"><?= L('Zapisz pogodę', 'Save weather') ?></button></p>
 </div>
 </form>
 
@@ -576,29 +608,50 @@ Klucz API: openweathermap.org → My API keys (nowy klucz aktywuje się do 2 god
 <input type="hidden" name="csrf" value="<?= h($_SESSION['csrf']) ?>">
 
 <div class="card">
-<h2><?= icon('chat') ?>Komentarze domyślne (rotacja)</h2>
-<p class="hint">Jeden na linię, zmieniają się co 10 minut. Limit: <?= $limit ?> znaków. Polskie znaki zostaną zamienione automatycznie.</p>
+<h2><?= icon('chat') ?><?= L('Komentarze domyślne (rotacja)', 'Rotating messages') ?></h2>
+<p class="hint"><?= L("Jeden na linię, zmieniają się co 10 minut. Limit: $limit znaków. Polskie znaki zostaną zamienione automatycznie.",
+ "One per line, changed every 10 minutes. Limit: $limit characters. Accented letters are converted automatically.") ?></p>
 <textarea name="default" data-kind="default"><?= h($f['default']) ?></textarea><div class="warn"></div>
 </div>
 
 <div class="card">
-<h2><?= icon('star') ?>Święta</h2>
-<p class="hint"><code>data | tekst</code>. Data: <code>MM-DD</code>, <code>easter</code>, <code>easter+1</code>,
-<code>thanksgiving</code>, <code>memorial</code>, <code>labor</code>, <code>pulaski</code>,
-albo <code>nth:miesiąc:dzień_tyg:który</code> (dzień 1=pon..7=niedz, który -1 = ostatni).</p>
+<h2><?= icon('star') ?><?= L('Wydarzenia cykliczne', 'Recurring events') ?></h2>
+<?php if ($LANG === 'en') { ?>
+<p class="hint">Holidays, contests, regular meetings: <code>date | text</code>, one per line, repeated every year (or month).</p>
+<table class="hint dates">
+<tr><td><code>MM-DD</code></td><td>fixed date, e.g. <code>12-24</code>, <code>07-04</code></td></tr>
+<tr><td><code>easter</code> <code>memorial</code> <code>labor</code> <code>thanksgiving</code></td><td>Easter, Memorial Day, Labor Day, Thanksgiving (calculated every year)</td></tr>
+<tr><td><code>fieldday</code></td><td>ARRL Field Day: Saturday of the 4th full weekend of June</td></tr>
+<tr><td><code>winterfieldday</code></td><td>Winter Field Day: Saturday of the last full weekend of January</td></tr>
+<tr><td><code>nth:M:D:N</code></td><td>N-th weekday D (1=Mon … 7=Sun) of month M; N <code>-1</code> = last; M <code>*</code> = every month</td></tr>
+<tr><td><code>…+1</code> <code>…-2</code></td><td>shift by days, e.g. <code>fieldday+1</code> = Field Day Sunday, <code>easter+1</code> = Easter Monday</td></tr>
+</table>
+<p class="hint">Example, every first Monday of the month: <code>nth:*:1:1 | Club meeting tonight 7pm!</code></p>
+<?php } else { ?>
+<p class="hint">Święta, zawody, regularne spotkania: <code>data | tekst</code>, jedno na linię, powtarzane co roku (albo co miesiąc).</p>
+<table class="hint dates">
+<tr><td><code>MM-DD</code></td><td>stała data, np. <code>12-24</code>, <code>11-11</code></td></tr>
+<tr><td><code>easter</code> <code>memorial</code> <code>labor</code> <code>thanksgiving</code></td><td>Wielkanoc, Memorial Day, Labor Day, Thanksgiving (liczone co roku)</td></tr>
+<tr><td><code>fieldday</code></td><td>ARRL Field Day: sobota 4. pełnego weekendu czerwca</td></tr>
+<tr><td><code>winterfieldday</code></td><td>Winter Field Day: sobota ostatniego pełnego weekendu stycznia</td></tr>
+<tr><td><code>nth:M:D:N</code></td><td>N-ty dzień tygodnia D (1=pon … 7=niedz) miesiąca M; N <code>-1</code> = ostatni; M <code>*</code> = każdy miesiąc</td></tr>
+<tr><td><code>…+1</code> <code>…-2</code></td><td>przesunięcie o dni, np. <code>fieldday+1</code> = niedziela Field Day, <code>easter+1</code> = Poniedziałek Wielkanocny</td></tr>
+</table>
+<p class="hint">Przykład, każdy pierwszy poniedziałek miesiąca: <code>nth:*:1:1 | Zapraszamy na Gracjane!</code></p>
+<?php } ?>
 <textarea name="holidays" data-kind="holidays" style="min-height:200px"><?= h($f['holidays']) ?></textarea><div class="warn"></div>
 </div>
 
 <div class="card">
-<h2><?= icon('cal') ?>Wydarzenia</h2>
-<p class="hint"><code>start | koniec | ile dni zapowiadać | nazwa | tekst w dniu wydarzenia</code><br>
-Np. <code>2026-11-21 | 2026-11-21 | 3 | Spotkanie Group 312 | Spotkanie dzis 18:00</code></p>
+<h2><?= icon('cal') ?><?= L('Wydarzenia jednorazowe', 'One-time events') ?></h2>
+<p class="hint"><?= L('<code>start | koniec | ile dni zapowiadać | nazwa | tekst w dniu wydarzenia</code><br>Kilka dni przed: „nazwa za X dni”, w dniu wydarzenia: Twój tekst. Np. <code>2026-11-21 | 2026-11-21 | 3 | Spotkanie Group 312 | Spotkanie dzis 18:00</code>',
+ '<code>start | end | days to announce | name | text on the day</code><br>A few days before: “name in X days”, on the day: your text. E.g. <code>2026-11-21 | 2026-11-21 | 3 | Club meeting | Club meeting today 6pm</code>') ?></p>
 <textarea name="events" data-kind="events"><?= h($f['events']) ?></textarea><div class="warn"></div>
-<p class="hint" style="margin-top:10px">Szablon zapowiedzi (<code>{name}</code>, <code>{days}</code>):</p>
+<p class="hint" style="margin-top:10px"><?= L('Szablon zapowiedzi', 'Countdown template') ?> (<code>{name}</code>, <code>{days}</code>):</p>
 <input type="text" name="announce" value="<?= h($f['announce']) ?>">
 </div>
 
-<button name="action" value="save">Zapisz</button>
+<button name="action" value="save"><?= L('Zapisz', 'Save') ?></button>
 </form>
 <?= footer_html() ?>
 </div>
@@ -616,7 +669,7 @@ document.querySelectorAll('textarea[data-kind]').forEach(t => {
     const bad = t.value.split('\n')
       .map((l, i) => [i + 1, part[t.dataset.kind](l).trim()])
       .filter(([, s]) => s.length > LIMIT);
-    out.textContent = bad.map(([n, s]) => `Linia ${n}: ${s.length}/${LIMIT} znaków - koniec zostanie ucięty`).join('\n');
+    out.textContent = bad.map(([n, s]) => <?= json_encode(L('Linia', 'Line')) ?> + ` ${n}: ${s.length}/${LIMIT} ` + <?= json_encode(L('znaków - koniec zostanie ucięty', 'characters - the end will be cut')) ?>).join('\n');
   };
   t.addEventListener('input', check);
   check();
