@@ -443,7 +443,20 @@ Dopóki tego nie zrobisz, beacon nic nie wysyła.</p></div>
   <span>Co: <b>10 min</b></span>
 </div>
 <?php if ($showErr) echo '<p class="err" style="margin:0 0 8px">Ostatnia próba (' . h(ago($lastErr['ts'])) . '): ' . h($lastErr['error']) . '</p>'; ?>
-<?php if (!$prev) { echo '<p class="err">Nie mogę uruchomić beacon.py - sprawdź ścieżkę i uprawnienia.</p>'; }
+<?php if (!$prev) {
+    // diagnostyka: dlaczego beacon.py nie odpowiada
+    $why = [];
+    $dis = array_map('trim', explode(',', (string)ini_get('disable_functions')));
+    if (in_array('shell_exec', $dis, true)) $why[] = 'PHP ma wyłączoną funkcję shell_exec (disable_functions w php.ini).';
+    $who = function_exists('posix_geteuid') ? (posix_getpwuid(posix_geteuid())['name'] ?? '?') : trim((string)@shell_exec('whoami'));
+    if (!is_file(APP_DIR . '/beacon.py')) $why[] = 'Brak pliku ' . APP_DIR . '/beacon.py.';
+    elseif (!is_readable(APP_DIR . '/config.json')) $why[] = "Użytkownik serwera WWW ($who) nie może odczytać " . APP_DIR . '/config.json.';
+    $out = in_array('shell_exec', $dis, true) ? '' : trim(beacon('--dry-run', true));
+    echo '<p class="err" style="margin-bottom:6px">Nie mogę uruchomić beacon.py.</p>';
+    foreach ($why as $w) echo '<p class="err" style="margin:2px 0">• ' . h($w) . '</p>';
+    if ($out !== '') echo '<div class="term">' . h($out) . '</div>';
+    echo '<p class="hint">Serwer WWW działa jako <b>' . h($who ?: '?') . '</b>. Uruchom ponownie instalator, a sam dopasuje uprawnienia.</p>';
+}
 else foreach ($prev['packets'] as $p) { ?>
   <p style="margin:4px 0"><span class="tag"><?= h($srcName[$p['source']] ?? $p['source']) ?></span><b><?= h($p['name']) ?></b><?= $p['text'] !== '' ? ' - ' . h($p['text']) : '' ?>
   <?php if ($p['truncated']) echo ' <span class="err">(ucięte)</span>'; ?></p>
